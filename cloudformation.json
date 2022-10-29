@@ -1,0 +1,181 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "This template creates a spot fleet with WordPress across 3 AZ of a region. Separate VPC, Subnets, ALB, Internet Gateway and Spot Instance with other resources required for running Wordpress are deployed, thus there can be charges for deployment, which may exceed Free Tier",
+	"Parameters": {},
+	"Resources": {
+		"WordpressVPC": {
+			"Type": "AWS::EC2::VPC",
+			"Properties": {
+				"CidrBlock": "10.16.0.0/24",
+				"EnableDnsHostnames": true,
+				"EnableDnsSupport": true,
+				"InstanceTenancy": "default",
+				"Tags": [
+					{
+						"Key" : "Name",
+						"Value" : "Wordpress-VPC"
+					}
+				]
+			}
+		},
+		"WordpressIGW": {
+  			"Type" : "AWS::EC2::InternetGateway",
+  			"Properties" : {
+      			"Tags" : [
+      				{
+						"Key" : "Name",
+						"Value" : "Wordpress-IGW"
+					}
+      			]
+    		}
+		},
+		"IGWAttachement": {
+  			"Type" : "AWS::EC2::VPCGatewayAttachment",
+  			"DependsOn": ["WordpressVPC", "WordpressIGW"],
+  			"Properties" : {
+      			"InternetGatewayId" : { "Ref": "WordpressIGW" },
+      			"VpcId" : { "Ref": "WordpressVPC" }
+    		}
+		},
+		"PublicRouteTable": {
+  			"Type" : "AWS::EC2::RouteTable",
+  			"DependsOn": "IGWAttachement",
+  			"Properties" : {
+  				"VpcId" : { "Ref": "WordpressVPC"},
+      			"Tags" : [
+      				{
+						"Key" : "Name",
+						"Value" : "PublicRouteTable"
+					}
+      			]
+    		}
+		},
+		"PublicRoute": {
+  			"Type" : "AWS::EC2::Route",
+  			"DependsOn": "PublicRouteTable",
+  			"Properties" : {
+      			"DestinationCidrBlock" : "0.0.0.0/0",
+      			"GatewayId" : {"Ref": "WordpressIGW"},
+      			"RouteTableId" : {"Ref": "PublicRouteTable"}
+    		}
+		},
+		"SubnetA": {
+  			"Type" : "AWS::EC2::Subnet",
+  			"Properties" : {
+  				"VpcId" : { "Ref" : "WordpressVPC" },
+      			"AvailabilityZone" : {
+      				"Fn::Select" : [ "0", { "Fn::GetAZs" : "" } ]
+      			},
+      			"CidrBlock" : "10.16.0.0/26",
+      			"MapPublicIpOnLaunch" : true,
+      			"PrivateDnsNameOptionsOnLaunch" : {
+      				"EnableResourceNameDnsARecord": true
+      			},
+      			"Tags" : [
+      				{
+						"Key" : "Name",
+						"Value" : "PublicSubnet-A"
+					}
+      			]
+    		}
+		},
+		"SubnetB": {
+  			"Type" : "AWS::EC2::Subnet",
+  			"Properties" : {
+  				"VpcId" : { "Ref" : "WordpressVPC" },
+      			"AvailabilityZone" : {
+      				"Fn::Select" : [ "1", { "Fn::GetAZs" : "" } ]
+      			},
+      			"CidrBlock" : "10.16.0.64/26",
+      			"MapPublicIpOnLaunch" : true,
+      			"PrivateDnsNameOptionsOnLaunch" : {
+      				"EnableResourceNameDnsARecord": true
+      			},
+      			"Tags" : [
+      				{
+						"Key" : "Name",
+						"Value" : "PublicSubnet-B"
+					}
+      			]
+    		}
+		},
+		"SubnetC": {
+  			"Type" : "AWS::EC2::Subnet",
+  			"Properties" : {
+  				"VpcId" : { "Ref" : "WordpressVPC" },
+      			"AvailabilityZone" : {
+      				"Fn::Select" : [ "2", { "Fn::GetAZs" : "" } ]
+      			},
+      			"CidrBlock" : "10.16.0.128/26",
+      			"MapPublicIpOnLaunch" : true,
+      			"PrivateDnsNameOptionsOnLaunch" : {
+      				"EnableResourceNameDnsARecord": true
+      			},
+      			"Tags" : [
+      				{
+						"Key" : "Name",
+						"Value" : "PublicSubnet-C"
+					}
+      			]
+    		}
+		},
+		"SubnetARouteTableAssociation": {
+  			"Type" : "AWS::EC2::SubnetRouteTableAssociation",
+  			"DependsOn": ["PublicRouteTable", "SubnetA"],
+  			"Properties" : {
+      			"RouteTableId" : {"Ref": "PublicRouteTable"},
+      			"SubnetId" : {"Ref": "SubnetA"}
+    		}
+		},
+		"SubnetBRouteTableAssociation": {
+  			"Type" : "AWS::EC2::SubnetRouteTableAssociation",
+  			"DependsOn": ["PublicRouteTable", "SubnetB"],
+  			"Properties" : {
+      			"RouteTableId" : {"Ref": "PublicRouteTable"},
+      			"SubnetId" : {"Ref": "SubnetB"}
+    		}
+		},
+		"SubnetCRouteTableAssociation": {
+  			"Type" : "AWS::EC2::SubnetRouteTableAssociation",
+  			"DependsOn": ["PublicRouteTable", "SubnetC"],
+  			"Properties" : {
+      			"RouteTableId" : {"Ref": "PublicRouteTable"},
+      			"SubnetId" : {"Ref": "SubnetC"}
+    		}
+		}
+	},
+	"Outputs": {
+		"VPCiD": {
+			"Description": "The ID of the VPC",
+			"Value": {"Fn::GetAtt": ["WordpressVPC", "VpcId"]}
+		},
+		"IGWiD": {
+			"Description": "The ID of the InternetGateway",
+			"Value": {"Fn::GetAtt": ["WordpressIGW", "InternetGatewayId"]}	
+		},
+		"SubnetAiD": {
+			"Description": "The ID of the Subnet A",
+			"Value": {"Fn::GetAtt": ["SubnetA", "SubnetId"]}
+		},
+		"SubnetAaZ": {
+			"Description": "The AZ of the Subnet A",
+			"Value": {"Fn::GetAtt": ["SubnetA", "AvailabilityZone"]}
+		},
+		"SubnetBiD": {
+			"Description": "The ID of the Subnet B",
+			"Value": {"Fn::GetAtt": ["SubnetB", "SubnetId"]}
+		},
+		"SubnetBaZ": {
+			"Description": "The AZ of the Subnet B",
+			"Value": {"Fn::GetAtt": ["SubnetB", "AvailabilityZone"]}
+		},
+		"SubnetCiD": {
+			"Description": "The ID of the Subnet C",
+			"Value": {"Fn::GetAtt": ["SubnetC", "SubnetId"]}
+		},
+		"SubnetCaZ": {
+			"Description": "The AZ of the Subnet C",
+			"Value": {"Fn::GetAtt": ["SubnetC", "AvailabilityZone"]}
+		}
+	}
+}
